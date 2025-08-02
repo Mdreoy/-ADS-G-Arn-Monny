@@ -1,0 +1,455 @@
+"use client";
+
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useToast } from '@/hooks/use-toast';
+import { Coins, Star, Megaphone, Zap, Gamepad2, ShoppingBag, Car, UtensilsCrossed, Music, Film, PlayCircle, Wallet, History, X, Badge, LucideIcon, LandPlot, Building, User, CheckCircle2, ArrowDown, ArrowUp, Gift, Share2, Copy, Camera } from 'lucide-react';
+import Image from 'next/image';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Avatar, AvatarImage, AvatarFallback } from './ui/avatar';
+
+const DAILY_ADS_LIMIT = 1000;
+
+interface Ad {
+  id: number;
+  title: string;
+  duration: number;
+  reward: number;
+  icon: LucideIcon;
+  tag?: string;
+  image: string;
+  dataAiHint: string;
+  company: string;
+}
+
+const adsData: Ad[] = [
+    { id: 1, title: 'Epic Quest Mobile', duration: 30, reward: 1.10, icon: Gamepad2, tag: 'Popular', image: 'https://placehold.co/600x400', dataAiHint: 'mobile game', company: 'GameLoft' },
+    { id: 2, title: 'Summer Fashion Sale', duration: 20, reward: 1, icon: ShoppingBag, tag: 'Quick', image: 'https://placehold.co/600x400', dataAiHint: 'fashion sale', company: 'Glamour Co.' },
+    { id: 3, title: 'All-New Sedan X', duration: 45, reward: 2.50, icon: Car, tag: 'High Reward', image: 'https://placehold.co/600x400', dataAiHint: 'new car', company: 'AutoDrive' },
+    { id: 4, title: 'Speedy Food Delivery', duration: 25, reward: 1.25, icon: UtensilsCrossed, image: 'https://placehold.co/600x400', dataAiHint: 'food delivery', company: 'QuickEats' },
+    { id: 5, title: 'SoundWave Music App', duration: 35, reward: 1.50, icon: Music, tag: 'New', image: 'https://placehold.co/600x400', dataAiHint: 'music app', company: 'SoundWave' },
+    { id: 6, title: 'CineStream Movies', duration: 40, reward: 2, icon: Film, image: 'https://placehold.co/600x400', dataAiHint: 'movie stream', company: 'CineStream' },
+];
+
+interface Transaction {
+  id: number;
+  type: 'withdrawal' | 'reward' | 'referral';
+  amount: number;
+  date: string;
+  status: 'Completed' | 'Pending';
+  title: string;
+}
+
+const transactionData: Transaction[] = [
+    { id: 1, type: 'withdrawal', amount: 500, date: '2024-07-20', status: 'Completed', title: 'Withdrawal to bKash' },
+    { id: 2, type: 'reward', amount: 2.50, date: '2024-07-20', status: 'Completed', title: 'All-New Sedan X Ad' },
+    { id: 3, type: 'reward', amount: 1.10, date: '2024-07-20', status: 'Completed', title: 'Epic Quest Mobile Ad' },
+    { id: 6, type: 'referral', amount: 5.00, date: '2024-07-20', status: 'Completed', title: 'Referral Bonus' },
+    { id: 4, type: 'withdrawal', amount: 200, date: '2024-07-19', status: 'Pending', title: 'Withdrawal to Nagad' },
+    { id: 5, type: 'reward', amount: 1.00, date: '2024-07-19', status: 'Completed', title: 'Summer Fashion Sale Ad' },
+];
+
+const referredFriendsData = [
+  { id: 1, name: 'Sabbir Ahmed', status: 'Joined' },
+  { id: 2, name: 'Nusrat Jahan', status: 'Joined' },
+  { id: 3, name: 'Imran Hossain', status: 'Pending' },
+]
+
+export function DashboardClient() {
+  const { toast } = useToast();
+  const [userData, setUserData] = useState({ name: 'Redoy Rahman', contact: '01405859182', balance: 0.00, paidBalance: 50.00, points: 250, adsWatched: 0, referralCode: "REF123XYZ", profilePicture: `https://api.dicebear.com/8.x/adventurer/svg?seed=Redoy%20Rahman` });
+  const [adPlayerOpen, setAdPlayerOpen] = useState(false);
+  const [currentAd, setCurrentAd] = useState<Ad | null>(null);
+  const [timeLeft, setTimeLeft] = useState(0);
+  const [withdrawMethod, setWithdrawMethod] = useState('bkash');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const adProgress = useMemo(() => {
+    if (!currentAd || timeLeft < 0) return 100;
+    return 100 - (timeLeft / currentAd.duration) * 100;
+  }, [timeLeft, currentAd]);
+
+  useEffect(() => {
+    if (adPlayerOpen && timeLeft > 0) {
+      const timer = setInterval(() => {
+        setTimeLeft(prev => prev - 1);
+      }, 1000);
+      return () => clearInterval(timer);
+    } else if (adPlayerOpen && timeLeft <= 0) {
+      // Ad finished
+      setTimeout(() => {
+        if (currentAd) {
+          setUserData(prev => ({
+            ...prev,
+            balance: prev.balance + currentAd.reward,
+            points: prev.points + currentAd.reward * 10,
+            adsWatched: prev.adsWatched + 1,
+          }));
+          toast({
+            title: "Reward Earned!",
+            description: `You earned ৳${currentAd.reward.toFixed(2)} and ${currentAd.reward * 10} points.`,
+            className: "bg-green-500/20 border-green-500/30 text-white",
+          });
+        }
+        setAdPlayerOpen(false);
+        setCurrentAd(null);
+      }, 1500);
+    }
+  }, [adPlayerOpen, timeLeft, currentAd, toast]);
+
+  const handleAdClick = (ad: Ad) => {
+    if (userData.adsWatched >= DAILY_ADS_LIMIT) {
+      toast({
+        title: "Daily Limit Reached",
+        description: `You've watched ${DAILY_ADS_LIMIT} ads today. Come back tomorrow!`,
+        variant: "destructive"
+      });
+      return;
+    }
+    setCurrentAd(ad);
+    setTimeLeft(ad.duration);
+    setAdPlayerOpen(true);
+  };
+
+  const handleWithdraw = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const amount = parseFloat(formData.get('amount') as string);
+    const accountNumber = formData.get('accountNumber') as string;
+
+    if (amount > userData.balance) {
+        toast({
+            title: "Insufficient Balance",
+            description: "You do not have enough balance to withdraw this amount.",
+            variant: "destructive",
+        });
+        return;
+    }
+    
+    // Process withdrawal
+    setUserData(prev => ({...prev, balance: prev.balance - amount, paidBalance: prev.paidBalance + amount}));
+    toast({
+        title: "Withdrawal Successful",
+        description: `৳${amount.toFixed(2)} has been sent to your ${withdrawMethod} account ${accountNumber}.`,
+        className: "bg-green-500/20 border-green-500/30 text-white",
+    });
+  }
+  
+  const handleCopyToClipboard = () => {
+    navigator.clipboard.writeText(userData.referralCode);
+    toast({
+      title: "Copied to Clipboard",
+      description: "Your referral code has been copied.",
+    });
+  };
+
+  const handleProfilePictureChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setUserData(prev => ({ ...prev, profilePicture: reader.result as string }));
+        toast({
+          title: "Profile Picture Updated",
+          description: "Your new profile picture has been saved.",
+        });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const remainingAds = DAILY_ADS_LIMIT - userData.adsWatched;
+  const limitProgress = (userData.adsWatched / DAILY_ADS_LIMIT) * 100;
+
+  return (
+    <>
+      <div className="w-full max-w-md h-[90vh] max-h-[850px] bg-card/60 backdrop-blur-sm border border-primary/20 rounded-2xl shadow-2xl shadow-primary/10 flex flex-col overflow-hidden">
+        {/* Header */}
+        <header className="p-4 flex items-center gap-4 border-b border-primary/20">
+          <Avatar className="w-12 h-12 border-2 border-accent">
+            <AvatarImage src={userData.profilePicture} />
+            <AvatarFallback>
+              <User />
+            </AvatarFallback>
+          </Avatar>
+          <div>
+            <h1 className="text-xl font-bold text-slate-100">{userData.name}</h1>
+            <p className="text-sm text-muted-foreground">{userData.contact}</p>
+          </div>
+        </header>
+
+        {/* User Info */}
+        <section className="p-4 grid grid-cols-2 gap-4 border-b border-primary/20">
+          <div className="bg-gradient-to-br from-primary to-purple-600 p-4 rounded-xl shadow-lg text-primary-foreground">
+            <h3 className="text-sm text-primary-foreground/80">Pending Balance</h3>
+            <div className="text-3xl font-bold">৳{userData.balance.toFixed(2)}</div>
+            <p className="text-xs text-primary-foreground/70 mt-1">Your balance is pending payment.</p>
+          </div>
+          <div className="bg-slate-900/50 p-4 rounded-xl">
+             <h3 className="text-sm text-slate-400 flex items-center gap-1"><CheckCircle2 size={14}/> Paid Out</h3>
+            <div className="text-3xl font-bold text-slate-100">৳{userData.paidBalance.toFixed(2)}</div>
+             <p className="text-xs text-slate-500 mt-1">Paid to your account. Please wait.</p>
+          </div>
+        </section>
+
+        {/* App Content */}
+        <Tabs defaultValue="watch" className="flex flex-col flex-1 overflow-hidden">
+            <TabsList className="grid w-full grid-cols-5 m-4 bg-slate-900/50">
+                <TabsTrigger value="watch"><PlayCircle className="mr-2 h-4 w-4"/>Watch Ads</TabsTrigger>
+                <TabsTrigger value="withdraw"><Wallet className="mr-2 h-4 w-4"/>Withdraw</TabsTrigger>
+                <TabsTrigger value="refer"><Gift className="mr-2 h-4 w-4"/>Refer</TabsTrigger>
+                <TabsTrigger value="history"><History className="mr-2 h-4 w-4"/>History</TabsTrigger>
+                <TabsTrigger value="profile"><User className="mr-2 h-4 w-4"/>Profile</TabsTrigger>
+            </TabsList>
+            <TabsContent value="watch" className="flex-1 overflow-y-auto px-4 pb-4 space-y-4">
+                <Card className="bg-slate-800/50">
+                    <CardContent className="p-4">
+                        <div className="flex items-center gap-2 mb-2">
+                            <Megaphone className="text-accent" size={20} />
+                            <h3 className="font-semibold text-accent-foreground">Ads Watched Today</h3>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span>{userData.adsWatched}</span>
+                          <span>{DAILY_ADS_LIMIT}</span>
+                        </div>
+                        <Progress value={limitProgress} className="h-2 bg-slate-700 mt-1" indicatorClassName="bg-accent" />
+                    </CardContent>
+                </Card>
+
+                <div className="space-y-3">
+                    {adsData.map(ad => (
+                        <Card key={ad.id} className="bg-slate-800/50 border-primary/20 hover:border-accent/50 hover:bg-slate-800 transition-all cursor-pointer group" onClick={() => handleAdClick(ad)}>
+                            <CardContent className="p-4 flex items-center gap-4 relative">
+                                <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-primary rounded-lg flex items-center justify-center group-hover:scale-105 transition-transform">
+                                    <ad.icon size={32} />
+                                </div>
+                                <div className="flex-1">
+                                    <h4 className="font-bold text-base">{ad.title}</h4>
+                                    <p className="text-sm text-muted-foreground">Duration: {ad.duration} seconds</p>
+                                    <div className="flex items-center gap-1 text-yellow-400 font-bold mt-1">
+                                        <Coins size={16} />
+                                        <span>Earn ৳{ad.reward.toFixed(2)}</span>
+                                    </div>
+                                </div>
+                                {ad.tag && <Badge variant="outline" className="absolute top-3 right-3 bg-accent/20 border-accent/30 text-accent">{ad.tag}</Badge>}
+                            </CardContent>
+                        </Card>
+                    ))}
+                </div>
+            </TabsContent>
+            <TabsContent value="withdraw" className="flex-1 overflow-y-auto px-4 pb-4 space-y-4">
+              <Card className="bg-slate-800/50 border-primary/20">
+                  <CardHeader>
+                      <CardTitle className="text-xl flex items-center gap-2"><Wallet className="text-accent"/>Withdraw Funds</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                      <form className="space-y-6" onSubmit={handleWithdraw}>
+                          <div>
+                              <Label htmlFor="amount">Amount (৳)</Label>
+                              <Input id="amount" name="amount" type="number" placeholder="e.g. 500" min="50" step="10" className="mt-1" required />
+                                <p className="text-xs text-muted-foreground mt-1">Minimum withdrawal amount is ৳50.</p>
+                          </div>
+                          <div>
+                              <Label>Select Method</Label>
+                              <RadioGroup defaultValue="bkash" name="paymentMethod" className="mt-2 grid grid-cols-2 gap-4" onValueChange={setWithdrawMethod}>
+                                  <div>
+                                      <RadioGroupItem value="bkash" id="bkash" className="peer sr-only" />
+                                      <Label htmlFor="bkash" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
+                                          <Building className="mb-3 h-6 w-6" />
+                                          bKash
+                                      </Label>
+                                  </div>
+                                  <div>
+                                      <RadioGroupItem value="nagad" id="nagad" className="peer sr-only" />
+                                      <Label htmlFor="nagad" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
+                                          <LandPlot className="mb-3 h-6 w-6" />
+                                          Nagad
+                                      </Label>
+                                  </div>
+                              </RadioGroup>
+                          </div>
+                          <div>
+                              <Label htmlFor="accountNumber">{withdrawMethod === 'bkash' ? 'bKash' : 'Nagad'} Account Number</Label>
+                              <Input id="accountNumber" name="accountNumber" type="tel" placeholder="e.g. 01700000000" className="mt-1" required />
+                          </div>
+                          <Button type="submit" className="w-full !mt-8 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-base py-6 transition-transform hover:scale-105">
+                              Request Withdraw
+                          </Button>
+                      </form>
+                  </CardContent>
+              </Card>
+            </TabsContent>
+            <TabsContent value="refer" className="flex-1 overflow-y-auto px-4 pb-4 space-y-4">
+                <Card className="bg-slate-800/50 border-primary/20 text-center">
+                    <CardHeader>
+                        <CardTitle className="text-2xl flex items-center justify-center gap-2"><Gift className="text-accent"/>Refer & Earn</CardTitle>
+                        <CardDescription>Invite your friends and earn <span className="font-bold text-accent">৳5 Taka</span> for each friend that joins!</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <Label htmlFor="referral-code" className="sr-only">Your Referral Code</Label>
+                        <div className="relative">
+                            <Input id="referral-code" value={userData.referralCode} readOnly className="pr-12 text-center text-lg font-mono tracking-widest bg-slate-900/70 h-12" />
+                            <Button size="icon" variant="ghost" className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8" onClick={handleCopyToClipboard}>
+                                <Copy className="h-5 w-5" />
+                            </Button>
+                        </div>
+                        <Button className="w-full bg-accent hover:bg-accent/90 text-accent-foreground font-bold">
+                            <Share2 className="mr-2 h-5 w-5"/>
+                            Share with Friends
+                        </Button>
+                    </CardContent>
+                </Card>
+                <Card className="bg-slate-800/50 border-primary/20">
+                    <CardHeader>
+                        <CardTitle className="text-xl">Referred Friends</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                        {referredFriendsData.map(friend => (
+                             <div key={friend.id} className="flex items-center justify-between p-3 bg-slate-900/50 rounded-lg">
+                                <div className="flex items-center gap-3">
+                                    <Avatar className="w-8 h-8">
+                                        <AvatarImage src={`https://api.dicebear.com/8.x/adventurer/svg?seed=${friend.name}`} />
+                                        <AvatarFallback>{friend.name.charAt(0)}</AvatarFallback>
+                                    </Avatar>
+                                    <p className="font-semibold">{friend.name}</p>
+                                </div>
+                                 <Badge variant={friend.status === 'Joined' ? 'default': 'secondary'} className={`${friend.status === 'Joined' ? 'bg-green-500/20 text-green-300' : 'bg-yellow-500/20 text-yellow-300'}`}>{friend.status}</Badge>
+                            </div>
+                        ))}
+                    </CardContent>
+                </Card>
+            </TabsContent>
+            <TabsContent value="history" className="flex-1 overflow-y-auto px-4 pb-4 space-y-4">
+                  <Card className="bg-slate-800/50 border-primary/20">
+                    <CardHeader>
+                        <CardTitle className="text-xl flex items-center gap-2"><History className="text-accent"/>Transaction History</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                        {transactionData.map(tx => (
+                            <div key={tx.id} className="flex items-center justify-between p-3 bg-slate-900/50 rounded-lg">
+                                <div className="flex items-center gap-3">
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${tx.type === 'reward' ? 'bg-green-500/20 text-green-400' : tx.type === 'referral' ? 'bg-blue-500/20 text-blue-400' : 'bg-red-500/20 text-red-400'}`}>
+                                        {tx.type === 'withdrawal' ? <ArrowUp size={18} /> : <ArrowDown size={18} />}
+                                    </div>
+                                    <div>
+                                        <p className="font-semibold">{tx.title}</p>
+                                        <p className="text-xs text-muted-foreground">{tx.date}</p>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <p className={`font-bold ${tx.type === 'reward' ? 'text-green-400' : tx.type === 'referral' ? 'text-blue-400' : 'text-red-400'}`}>
+                                        {tx.type === 'withdrawal' ? '-' : '+'}৳{tx.amount.toFixed(2)}
+                                    </p>
+                                    <p className={`text-xs ${tx.status === 'Completed' ? 'text-green-400' : 'text-yellow-400'}`}>{tx.status}</p>
+                                </div>
+                            </div>
+                        ))}
+                    </CardContent>
+                </Card>
+            </TabsContent>
+             <TabsContent value="profile" className="flex-1 overflow-y-auto px-4 pb-4 space-y-4">
+                <Card className="bg-slate-800/50 border-primary/20">
+                    <CardHeader>
+                        <CardTitle className="text-xl flex items-center gap-2"><User className="text-accent"/>Your Profile</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                        <div className="flex flex-col items-center gap-4">
+                            <div className="relative group">
+                                <Avatar className="w-24 h-24 border-4 border-accent">
+                                    <AvatarImage src={userData.profilePicture} />
+                                    <AvatarFallback className="text-4xl">{userData.name.charAt(0)}</AvatarFallback>
+                                </Avatar>
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  className="absolute bottom-0 right-0 rounded-full h-8 w-8 bg-slate-900/80 hover:bg-slate-800/90 group-hover:opacity-100 opacity-50 transition-opacity"
+                                  onClick={() => fileInputRef.current?.click()}
+                                >
+                                    <Camera className="h-4 w-4" />
+                                </Button>
+                                <Input 
+                                  type="file" 
+                                  className="hidden" 
+                                  ref={fileInputRef} 
+                                  accept="image/*"
+                                  onChange={handleProfilePictureChange}
+                                />
+                            </div>
+                            <div className="text-center">
+                                <h2 className="text-2xl font-bold">{userData.name}</h2>
+                                <p className="text-muted-foreground">{userData.contact}</p>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4 text-center">
+                            <div className="bg-slate-900/50 p-3 rounded-lg">
+                                <p className="text-sm text-muted-foreground">Points</p>
+                                <p className="text-2xl font-bold">{userData.points}</p>
+                            </div>
+                            <div className="bg-slate-900/50 p-3 rounded-lg">
+                                <p className="text-sm text-muted-foreground">Ads Watched</p>
+                                <p className="text-2xl font-bold">{userData.adsWatched}</p>
+                            </div>
+                        </div>
+
+                        <div>
+                            <Label htmlFor="profile-referral-code">Your Referral Code</Label>
+                            <div className="relative mt-1">
+                                <Input id="profile-referral-code" value={userData.referralCode} readOnly className="pr-12 bg-slate-900/70" />
+                                <Button size="icon" variant="ghost" className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8" onClick={handleCopyToClipboard}>
+                                    <Copy className="h-5 w-5" />
+                                </Button>
+                            </div>
+                        </div>
+                        
+                        <Button variant="outline" className="w-full">Edit Profile</Button>
+                    </CardContent>
+                </Card>
+            </TabsContent>
+        </Tabs>
+      </div>
+
+      {/* Ad Player Dialog */}
+      <Dialog open={adPlayerOpen} onOpenChange={setAdPlayerOpen}>
+        <DialogContent className="max-w-md w-full p-0 bg-slate-950 border-primary/30 flex flex-col h-full md:h-auto overflow-hidden">
+          <DialogHeader className="absolute top-0 left-0 right-0 z-10 flex flex-row items-center justify-between p-4 bg-black/30">
+            <DialogTitle className="text-primary-foreground">{currentAd?.title}</DialogTitle>
+            <div className="flex items-center gap-2">
+                <Badge variant="secondary" className="bg-black/50">{timeLeft}s</Badge>
+                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full bg-black/50 hover:bg-black/70" onClick={() => setAdPlayerOpen(false)}>
+                    <X className="h-4 w-4" />
+                </Button>
+            </div>
+          </DialogHeader>
+          <div className="flex-1 flex flex-col justify-center items-center relative">
+            <Image
+                src={currentAd?.image || 'https://placehold.co/600x400'}
+                alt={currentAd?.title || 'Ad'}
+                width={600}
+                height={400}
+                data-ai-hint={currentAd?.dataAiHint}
+                className="absolute inset-0 w-full h-full object-cover opacity-30"
+            />
+             <div className="relative z-10 text-center p-6 text-white">
+                <h2 className="text-3xl font-bold mb-2">{currentAd?.title}</h2>
+                <p className="text-slate-300 mb-4">From {currentAd?.company}</p>
+                <Button className="bg-accent text-accent-foreground hover:bg-accent/90">Learn More</Button>
+            </div>
+          </div>
+          <div className="p-4 space-y-3 bg-black/30">
+            <Progress value={adProgress} className="h-2 w-full" indicatorClassName="bg-accent" />
+            <p className="text-center text-sm font-semibold text-yellow-400">
+              {timeLeft > 0 ? `Watch for ${timeLeft} more seconds to get your reward` : `Congratulations! You've earned ৳${currentAd?.reward.toFixed(2)}`}
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
